@@ -30,6 +30,8 @@ MBR и GPT. Команды gdisk/fdisk/parted/partprobe.
 
 ## Выполнение
 
+#### Сборка рэйда 
+
 Добавил в Vagrantfile еще дисков
 
 ```
@@ -87,11 +89,153 @@ cat /proc/mdstat
 mdadm -D /dev/md0
 ```
 
-- *Приложен Vagrantfile, который сразу собирает систему с подключенным рейдом  
-
-каталог 01_raid/raid_10)
-
-- **
 
 
+#### *Сборка рэйда при загрузке
 
+Приложен Vagrantfile, который сразу собирает систему с подключенным рейдом  
+
+https://github.com/a-dolotov/otus_linux/tree/master/02_raid/raid_10
+
+
+
+#### ** Перенос работающей системы с одним диском на RAID 1
+
+Добавил диск равного размера. 
+
+Вывод `lsblk` в первоначальном состоянии
+
+```
+[root@otuslinux ~]# lsblk
+NAME   MAJ:MIN RM SIZE RO TYPE MOUNTPOINT
+sda      8:0    0  40G  0 disk 
+└─sda1   8:1    0  40G  0 part /
+sdb      8:16   0  40G  0 disk 
+```
+
+Скопирова таблицу разделов диска `/dev/sda` на диск `/dev/sdb`:
+
+```
+sfdisk -d /dev/sda | sfdisk /dev/sdb
+```
+
+Изменил тип нового  диска `/dev/sdb` на «Linux raid autodetect» 
+
+```
+fdisk /dev/sdb 
+t
+fd
+w
+```
+
+Создал массив, указав один из дисков массива как отсутствующий:
+
+```
+mdadm --create /dev/md0 --metadata=0.90 --level=1 --raid-devices=2 missing /dev/sdb1
+```
+
+Создал файловую систему
+
+```
+mkfs.xfs /dev/md0
+```
+
+Создал конфиг для mdadm
+
+```
+mkdir /etc/mdadm
+mdadm --detail --scan > /etc/mdadm/mdadm.conf
+```
+
+Смонтировал массив
+
+```
+mount /dev/md0 /mnt/
+```
+
+Скопировал систему на массив
+
+```
+rsync -axu / /mnt/
+```
+
+Смонтировал информацию о текущей системе в  новый корень и chroot в него
+
+```
+mount --bind /proc /mnt/proc && mount --bind /dev /mnt/dev && mount --bind /sys /mnt/sys \ && mount --bind /run /mnt/run && chroot /mnt/
+```
+
+Скорректировал /etc/fstab, прописал UUID массива. Чтобы добавить UUID и затем подправить выполнил:
+
+```
+ls -l /dev/disk/by-uuid |grep md >> /etc/fstab && vi /etc/fstab
+```
+
+Обновил initramfs, с нужными модулями
+
+```
+mv /boot/initramfs-$(uname -r).img /boot/initramfs-$(uname -r).img.$(date +%m-%d-%H%M%S).bak
+dracut /boot/initramfs-$(uname -r).img $(uname -r)
+```
+
+Подправил `/etc/default/grub` добавил параметр «`rd.auto=1`» в строку «`GRUB_CMDLINE_LINUX`»
+
+Перписал конфиг GRUB и установил его на диск `/dev/sdb`
+
+```
+grub2-mkconfig -o /boot/grub2/grub.cfg 
+grub2-install /dev/sdb
+```
+
+До перезагразки нужно отключить SELinux в `/etc/selinux/config`, иначе не получится залогиниться в систему (спасибо за подсказку преподавателю)
+
+```
+SELINUX=disabled
+```
+
+Перезагрузка
+
+После перезагрузки выбрал загрузку со второго диска
+
+Изменил тип первого  диска `/dev/sda` на «Linux raid autodetect» 
+
+```
+fdisk /dev/sda
+t
+fd
+w
+```
+
+Добавил первый диск в массив
+
+```
+mdadm /dev/md0 --add /dev/sda1
+```
+
+Наблюдал за состоянием массива
+
+```
+mdadm -D /dev/md0
+cat /proc/mdstat 
+```
+
+Переустановил GRUB на первый диск
+
+```
+grub2-install /dev/sda
+```
+
+Вывод `lsblk` в первоначальном состоянии
+
+```
+[root@otuslinux ~]# lsblk
+NAME    MAJ:MIN RM SIZE RO TYPE  MOUNTPOINT
+sda       8:0    0  40G  0 disk  
+└─sda1    8:1    0  40G  0 part  
+  └─md0   9:0    0  40G  0 raid1 /
+sdb       8:16   0  40G  0 disk  
+└─sdb1    8:17   0  40G  0 part  
+  └─md0   9:0    0  40G  0 raid1 /
+```
+
+Поочередно извлекал первый и второй диски - система загружалась
