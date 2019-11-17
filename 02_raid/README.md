@@ -147,6 +147,14 @@ mkdir /etc/mdadm
 mdadm --detail --scan > /etc/mdadm/mdadm.conf
 ```
 
+Отключил SELinux в `/etc/selinux/config`, иначе после загрузки с raid не получится залогиниться в систему (подсказка преподавателя)
+
+```
+SELINUX=disabled
+```
+
+
+
 Смонтировал массив
 
 ```
@@ -185,12 +193,6 @@ dracut /boot/initramfs-$(uname -r).img $(uname -r)
 ```
 grub2-mkconfig -o /boot/grub2/grub.cfg 
 grub2-install /dev/sdb
-```
-
-До перезагразки нужно отключить SELinux в `/etc/selinux/config`, иначе не получится залогиниться в систему (спасибо за подсказку преподавателю)
-
-```
-SELINUX=disabled
 ```
 
 Перезагрузка
