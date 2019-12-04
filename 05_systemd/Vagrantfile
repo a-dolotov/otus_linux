@@ -1,0 +1,76 @@
+# Describe VMs
+MACHINES = {
+  # VM name "Systemd"
+  :"systemd" => {
+              # VM box
+              :box_name => "centos/7",
+              # VM CPU count
+              :cpus => 2,
+              # VM RAM size (Mb)
+              :memory => 4096,
+              # networks
+              :net => [],
+              # forwarded ports
+              :forwarded_port => []
+            }
+}
+
+Vagrant.configure("2") do |config|
+  MACHINES.each do |boxname, boxconfig|
+    # Disable shared folders
+    config.vm.synced_folder ".", "/vagrant", disabled: true
+    # Apply VM config
+    config.vm.define boxname do |box|
+      # Set VM base box and hostname
+      box.vm.box = boxconfig[:box_name]
+      box.vm.host_name = boxname.to_s
+      # Additional network config if present
+      if boxconfig.key?(:net)
+        boxconfig[:net].each do |ipconf|
+          box.vm.network "private_network", ipconf
+        end
+      end
+      # Port-forward config if present
+      if boxconfig.key?(:forwarded_port)
+        boxconfig[:forwarded_port].each do |port|
+          box.vm.network "forwarded_port", port
+        end
+      end
+      # VM resources config
+      box.vm.provider "virtualbox" do |v|
+        # Set VM RAM size and CPU count
+        v.memory = boxconfig[:memory]
+        v.cpus = boxconfig[:cpus]
+      end
+
+
+      box.vm.provision "file", source: "scripts", destination: "/home/vagrant/"
+      box.vm.provision "shell", inline: <<-SHELL
+        mkdir -p ~root/.ssh
+        cp ~vagrant/.ssh/auth* ~root/.ssh
+        yum install -y mc
+        yum install epel-release -y && yum install spawn-fcgi php php-cli mod_fcgid httpd -y
+
+        chown root:root /home/vagrant/scripts/*
+        chmod 644 /home/vagrant/scripts/*
+        chmod 755 /home/vagrant/scripts/watchlog.sh
+
+        mv /home/vagrant/scripts/watchlog /etc/sysconfig/
+        mv /home/vagrant/scripts/watchlog.sh /opt/
+        mv /home/vagrant/scripts/* /etc/systemd/system/
+        rm -r /home/vagrant/scripts
+
+        sed -i 's/#SOCKET/SOCKET/' /etc/sysconfig/spawn-fcgi
+        sed -i 's/#OPTIONS/OPTIONS/' /etc/sysconfig/spawn-fcgi
+
+        echo 'OPTIONS=-f conf/first.conf' > /etc/sysconfig/httpd-first
+        echo 'OPTIONS=-f conf/second.conf' > /etc/sysconfig/httpd-second
+        cp /etc/httpd/conf/httpd.conf /etc/httpd/conf/first.conf
+        cp /etc/httpd/conf/httpd.conf /etc/httpd/conf/second.conf
+        sed -i 's/Listen 80/Listen 8080/' /etc/httpd/conf/second.conf
+        echo "PidFile /var/run/httpd-second.pid" >> /etc/httpd/conf/second.conf
+
+      SHELL
+    end
+  end
+end
