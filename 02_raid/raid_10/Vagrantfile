@@ -1,13 +1,10 @@
 # -*- mode: ruby -*-
 # vim: set ft=ruby :
 
-#home = ENV['HOME']
+
 vb_path = `VBoxManage list systemproperties | grep "Default machine folder"`
 vb_machine_folder = vb_path.split(':')[1].strip()
 
-# current_time = DateTime.now
-# datetime = current_time.strftime "%Y-%m-%d_%H-%M-%S"
-# vb_name = "otus-linux_raid_" + datetime
 vb_name = "otus-linux_raid_10"
 
 MACHINES = {
