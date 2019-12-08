@@ -43,14 +43,18 @@ Vagrant.configure("2") do |config|
         v.cpus = boxconfig[:cpus]
       end
 
-
+      config.vm.synced_folder "~/otus_dz/05_systemd", "/home/vagrant/otus_linux/"
       box.vm.provision "file", source: "scripts", destination: "/home/vagrant/"
       box.vm.provision "shell", inline: <<-SHELL
         mkdir -p ~root/.ssh
         cp ~vagrant/.ssh/auth* ~root/.ssh
-        yum install -y mc
+        yum install mc -y
         yum install epel-release -y && yum install spawn-fcgi php php-cli mod_fcgid httpd -y
+        yum install expect -y
+        yum install wget -y
+        wget -q https://downloads.atlassian.com/software/jira/downloads/atlassian-jira-software-8.5.1-x64.bin
 
+        mv /home/vagrant/scripts/install-jira.sh /home/vagrant/
         chown root:root /home/vagrant/scripts/*
         chmod 644 /home/vagrant/scripts/*
         chmod 755 /home/vagrant/scripts/watchlog.sh
@@ -70,6 +74,11 @@ Vagrant.configure("2") do |config|
         sed -i 's/Listen 80/Listen 8080/' /etc/httpd/conf/second.conf
         echo "PidFile /var/run/httpd-second.pid" >> /etc/httpd/conf/second.conf
 
+        chmod a+x /home/vagrant/atlassian-jira-software-8.5.1-x64.bin
+        chmod a+x /home/vagrant/install-jira.sh
+        /home/vagrant/install-jira.sh
+        service jira stop
+        systemctl enable --now jira.service
       SHELL
     end
   end

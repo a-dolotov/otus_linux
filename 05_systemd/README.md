@@ -273,11 +273,82 @@ tcp    LISTEN     0      128      :::80                   :::*                  
 
 
 
+##### 4. *Скачать демо-версию Atlassian Jira и переписать основной скрипт запуска на unit-файл.
+
+Скачиваем демо-версию Atlassian Jira:
+
+```
+yum install wget -y
+wget -q https://downloads.atlassian.com/software/jira/downloads/\
+atlassian-jira-software-8.5.1-x64.bin
+```
+
+Устанавливать будем с параметрами по умолчанию. 
+
+Для установки `jira` создадим скрипт `install-jira.sh`  с ответами на запросы установщика (в файле только ответы) и запустим:
+
+```
+#!/bin/expect -f
+set timeout -1
+spawn /home/vagrant/atlassian-jira-software-8.5.1-x64.bin
+send "y\r"
+send "o\r"
+send "1\r"
+send "i\r"
+send "y\r"
+expect eof   
+```
+
+После установки запустится сервис `jira`. Остановим его:
+
+```
+service jira stop
+```
+
+`etc/rc.d/init.d/jira` - cам Init скрипт, который будем переписывать
+
+Создадим юнит для нашего сервиса `jira.service` и разместим его в `/etc/systemd/system/`:
+
+```
+[Unit]
+Description=JIRA Service
+After=network.target
+
+[Service]
+Type=forking
+User=jira
+ExecStart=/opt/atlassian/jira/bin/start-jira.sh
+ExecRestart=/opt/atlassian/jira/current/bin/stop-jira.sh && \ /opt/atlassian/jira/bin/start-jira.sh
+ExecStop=/opt/atlassian/jira/current/bin/stop-jira.sh
+
+[Install]
+WantedBy=multi-user.target 
+```
+
+Включаем сервис в автостарт и запускаем его:
+
+```
+systemctl enable --now jira.service 
+```
+
+Проверяем:
+
+```
+[vagrant@systemd ~]$ systemctl status jira.service 
+● jira.service - JIRA Service
+   Loaded: loaded (/etc/systemd/system/jira.service; enabled; vendor preset: disabled)
+   Active: active (running) since Вс 2019-12-08 14:55:14 UTC; 23min ago
+  Process: 3205 ExecStop=/opt/atlassian/jira/current/bin/stop-jira.sh (code=exited, status=203/EXEC)
+  Process: 3214 ExecStart=/opt/atlassian/jira/bin/start-jira.sh (code=exited, status=0/SUCCESS)
+ Main PID: 3251 (java)
+   CGroup: /system.slice/jira.service
+           └─3251 /opt/atlassian/jira/jre//bin/java -Djava.util.logging.config.file=/opt/atlassian/jira/conf/logging.properties -Djava.util.logging.manager=org.apache.juli.ClassLoaderLogManager -Xms384m ...
+```
+
+Стартовая страница `jira` http://127.0.0.1:8080 открывается.
+
+Все  это выполнится Vagrant'ом при разворачивании виртуальной машины.
+
+
+
 Все  заранее подготовленные скрипты находятся вместе с Vagrantfile в каталоге `scripts`. Vagrant при выполнении  provision разместит их в необходимые каталоги с нужными правами.
-
-
-
-
-
-
-
