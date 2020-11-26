@@ -1,0 +1,13 @@
+[Unit]
+Description=Mount NFS Share
+Requires=network-online.target
+After=network-online.target
+
+[Mount]
+What=nfss.testnfs.lan:/var/share_systemd
+Where=/mnt/share_systemd
+Type=nfs
+Options=rw,sync,hard,intr,sec=krb5
+
+[Install]
+WantedBy=multi-user.target
